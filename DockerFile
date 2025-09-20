@@ -1,13 +1,20 @@
 FROM python:3.11-slim
 
-# ffmpeg для обработки голосовых
-RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
+# Системные зависимости + ffmpeg
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+# Опционально: фикс для питоновских локалей
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Код
 COPY . .
 
-# запуск aiogram-поллинга
+# Запуск aiogram-поллинга
 CMD ["python", "bot.py"]

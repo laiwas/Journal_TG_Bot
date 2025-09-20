@@ -4,3 +4,4 @@ ffmpeg-python==0.2.0
 python-dotenv==1.0.1
 requests==2.32.3
 uvloop==0.20.0; sys_platform != 'win32'
+openai==1.*
