@@ -1,22 +1,18 @@
 FROM python:3.11-slim
 
-# Системные зависимости + ffmpeg
+# ffmpeg + инструменты сборки (без ffmpeg-dev — он не нужен, т.к. мы не ставим av)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg pkg-config \
-    libavformat-dev libavcodec-dev libavdevice-dev libavutil-dev \
-    libavfilter-dev libswscale-dev libswresample-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Опционально: фикс для питоновских локалей
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    ffmpeg ca-certificates build-essential pkg-config && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
 
-# Код
+# Покажем в логах, если вдруг кто-то тянет av
+RUN pip install --no-cache-dir pipdeptree && \
+    pip install --no-cache-dir -r requirements.txt && \
+    pipdeptree -r -p av || true
+
 COPY . .
 
-# Запуск aiogram-поллинга
 CMD ["python", "bot.py"]
