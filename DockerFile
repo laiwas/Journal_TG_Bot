@@ -2,8 +2,10 @@ FROM python:3.11-slim
 
 # Системные зависимости + ffmpeg
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
+    ffmpeg pkg-config \
+    libavformat-dev libavcodec-dev libavdevice-dev libavutil-dev \
+    libavfilter-dev libswscale-dev libswresample-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 # Опционально: фикс для питоновских локалей
 ENV PYTHONDONTWRITEBYTECODE=1 \
