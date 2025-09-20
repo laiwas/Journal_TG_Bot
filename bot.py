@@ -39,14 +39,23 @@ def field_from_question(q: str) -> str | None:
     if "сдвг" in q or "adhd" in q: return "ADHDScore"
     return None
 
+def yes_no(v: bool) -> str:
+    return "Да" if bool(v) else "Нет"
+
 def _render_summary(date_str: str, d: Dict[str, Any]) -> str:
+    ap = d.get("ActionPoints") or {}
     return (
         f"Сводка за {date_str}:\n\n"
         f"Дела и мысли:\n- " + "\n- ".join(d.get("DayLog", []) or ["—"]) + "\n\n"
         f"Чувства: {d.get('Feelings') or '—'}\n\n"
         f"Три победы:\n- " + "\n- ".join(d.get("ThreeWins", []) or ["—"]) + "\n\n"
         f"StoryWorthy: {d.get('StoryWorthy') or '—'}\n\n"
-        f"СДВГ: {d.get('ADHDScore', 0)}"
+        f"СДВГ: {d.get('ADHDScore', 0)}\n\n"
+        f"Action Points:\n"
+        f"- Книга: {yes_no(ap.get('BookRead'))}\n"
+        f"- Записи: {yes_no(ap.get('NotesDone'))}\n"
+        f"- RPG: {yes_no(ap.get('RPG'))}\n"
+        f"- Finance: {yes_no(ap.get('Finance'))}"
     )
 
 # ──────────────────────────────────────────────
@@ -55,8 +64,8 @@ def _render_summary(date_str: str, d: Dict[str, Any]) -> str:
 @dp.message(CommandStart())
 async def start(m: Message):
     await m.answer(
-        "Привет! Пришли текст или голосовое — я соберу день по секциям:\n"
-        "1) Дела и мысли\n2) Чувства\n3) Три победы\n4) StoryWorthy\n5) СДВГ (0–100)\n\n"
+        "Привет! Пришли текст или голосовое — соберу день по секциям:\n"
+        "1) Дела и мысли (детально)\n2) Чувства (кратко)\n3) Три победы\n4) StoryWorthy\n5) СДВГ (0–100)\n6) Action Points\n\n"
         "Команды: /newday — начать новый день, /summary — показать текущую сводку."
     )
 
