@@ -1,8 +1,3 @@
-import os, json
-from openai import OpenAI
-from dotenv import load_dotenv
-from prompts import STRUCT_PROMPT, MISSING_PROMPT
-
 load_dotenv()
 api_key = os.getenv("OPENAI_API_KEY")
 if not api_key:
@@ -18,17 +13,17 @@ def _chat(prompt: str) -> str:
     )
     return resp.choices[0].message.content.strip()
 
-def _clean(s: str) -> str:
+def _clean_json(s: str) -> str:
     s = s.strip().strip("`")
     if s.lower().startswith("json"):
         s = s[4:].strip()
     return s
 
+# ── День: структура ───────────────────────────────────────────────────────────
+
 def structure_day(raw_text: str) -> dict:
     out = _chat(STRUCT_PROMPT + raw_text)
-    data = json.loads(_clean(out))
-
-    # гарантируем наличие всех ключей
+    data = json.loads(_clean_json(out))
     default = {
         "DayLog": [],
         "Feelings": "",
@@ -42,9 +37,8 @@ def structure_day(raw_text: str) -> dict:
             "Finance": False
         }
     }
-    # мягкое слияние (если ActionPoints отсутствует — подставим пустые)
+    # мягкое слияние
     default.update({k: data.get(k, default[k]) for k in default.keys()})
-    # внутри ActionPoints — тоже мягкое слияние
     ap = default["ActionPoints"]
     ap_src = data.get("ActionPoints") or {}
     ap.update({
@@ -56,12 +50,13 @@ def structure_day(raw_text: str) -> dict:
     default["ActionPoints"] = ap
     return default
 
-def missing_questions(structured: dict) -> list[str]:
-    # спрашиваем только про основные секции, ActionPoints оставляем как есть
-    qs = []
-    if not structured.get("DayLog"): qs.append("Какие дела и мысли были сегодня?")
-    if not structured.get("Feelings"): qs.append("Как ты себя суммарно чувствовал?")
-    if not structured.get("ThreeWins"): qs.append("Какие 3 победы/достижения за день?")
-    if not structured.get("StoryWorthy"): qs.append("Была ли история или момент, который запомнился?")
-    if not structured.get("ADHDScore"): qs.append("Оцени СДВГ от 0 до 100")
-    return qs[:4]
+# ── Понимание задачи ──────────────────────────────────────────────────────────
+
+def understand_task(raw_text: str) -> str:
+    """
+    Возвращает готовый текст по структуре из TASK_PROMPT/TAKS_PROMPT.
+    Никакого JSON — формат ровно как в промпте (разделы построчно).
+    """
+    prompt = TASK_PROMPT.strip() + "\n\nТекст:\n" + raw_text.strip()
+    out = _chat(prompt)
+    return out.strip()
