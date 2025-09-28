@@ -1,17 +1,17 @@
-import asyncio
+# llm.py — тонкая обёртка над OpenAI для двух функций:
+# 1) structure_day(text) -> dict
+# 2) understand_task(text) -> str
+
 import os
-import tempfile
-import datetime
-from typing import Dict, Any
-
-from aiogram import Bot, Dispatcher, F
-from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
-from aiogram.filters import CommandStart, Command
+import json
 from dotenv import load_dotenv
+from openai import OpenAI
 
-from stt import ogg_to_wav, transcribe
-from llm import structure_day, understand_task
+from prompts import STRUCT_PROMPT, TASK_UNDERSTANDING_PROMPT
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Init
+# ──────────────────────────────────────────────────────────────────────────────
 load_dotenv()
 api_key = os.getenv("OPENAI_API_KEY")
 if not api_key:
@@ -19,6 +19,9 @@ if not api_key:
 
 client = OpenAI(api_key=api_key)
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Helpers
+# ──────────────────────────────────────────────────────────────────────────────
 def _chat(prompt: str) -> str:
     resp = client.chat.completions.create(
         model="gpt-4o-mini",
@@ -33,11 +36,20 @@ def _clean_json(s: str) -> str:
         s = s[4:].strip()
     return s
 
-# ── День: структура ───────────────────────────────────────────────────────────
-
+# ──────────────────────────────────────────────────────────────────────────────
+# День: структура
+# ──────────────────────────────────────────────────────────────────────────────
 def structure_day(raw_text: str) -> dict:
-    out = _chat(STRUCT_PROMPT + raw_text)
-    data = json.loads(_clean_json(out))
+    """
+    Возвращает dict строго под ожидаемую схему, даже если модель вернула что-то неполное.
+    """
+    out = _chat(STRUCT_PROMPT + (raw_text or ""))
+    try:
+        data = json.loads(_clean_json(out))
+    except Exception:
+        # страховка: если вдруг вернулся не-JSON
+        data = {}
+
     default = {
         "DayLog": [],
         "Feelings": "",
@@ -51,26 +63,30 @@ def structure_day(raw_text: str) -> dict:
             "Finance": False
         }
     }
-    # мягкое слияние
-    default.update({k: data.get(k, default[k]) for k in default.keys()})
-    ap = default["ActionPoints"]
-    ap_src = data.get("ActionPoints") or {}
-    ap.update({
-        "BookRead":  bool(ap_src.get("BookRead",  ap["BookRead"])),
-        "NotesDone": bool(ap_src.get("NotesDone", ap["NotesDone"])),
-        "RPG":       bool(ap_src.get("RPG",       ap["RPG"])),
-        "Finance":   bool(ap_src.get("Finance",   ap["Finance"]))
-    })
-    default["ActionPoints"] = ap
+
+    # Мягкое слияние (не перетираем структуру ActionPoints)
+    for k, v in default.items():
+        if k == "ActionPoints":
+            ap_src = (data.get("ActionPoints") or {})
+            default["ActionPoints"].update({
+                "BookRead":  bool(ap_src.get("BookRead",  default["ActionPoints"]["BookRead"])),
+                "NotesDone": bool(ap_src.get("NotesDone", default["ActionPoints"]["NotesDone"])),
+                "RPG":       bool(ap_src.get("RPG",       default["ActionPoints"]["RPG"])),
+                "Finance":   bool(ap_src.get("Finance",   default["ActionPoints"]["Finance"])),
+            })
+        else:
+            if k in data and data[k] is not None:
+                default[k] = data[k]
     return default
 
-# ── Понимание задачи ──────────────────────────────────────────────────────────
-
+# ──────────────────────────────────────────────────────────────────────────────
+# Понимание задачи
+# ──────────────────────────────────────────────────────────────────────────────
 def understand_task(raw_text: str) -> str:
     """
-    Возвращает готовый текст по структуре из TASK_PROMPT/TAKS_PROMPT.
+    Возвращает готовый текст по структуре из TASK_UNDERSTANDING_PROMPT.
     Никакого JSON — формат ровно как в промпте (разделы построчно).
     """
-    prompt = TASK_PROMPT.strip() + "\n\nТекст:\n" + raw_text.strip()
+    prompt = TASK_UNDERSTANDING_PROMPT.strip() + "\n\nТекст:\n" + (raw_text or "").strip()
     out = _chat(prompt)
     return out.strip()
