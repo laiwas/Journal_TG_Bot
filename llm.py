@@ -1,3 +1,17 @@
+import asyncio
+import os
+import tempfile
+import datetime
+from typing import Dict, Any
+
+from aiogram import Bot, Dispatcher, F
+from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.filters import CommandStart, Command
+from dotenv import load_dotenv
+
+from stt import ogg_to_wav, transcribe
+from llm import structure_day, understand_task
+
 load_dotenv()
 api_key = os.getenv("OPENAI_API_KEY")
 if not api_key:
