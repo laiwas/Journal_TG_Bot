@@ -1,13 +1,7 @@
 import tempfile, subprocess
-from faster_whisper import WhisperModel
+from openai import OpenAI
 
-_model = None
-
-def _get_model():
-    global _model
-    if _model is None:
-        _model = WhisperModel("small", device="cpu", compute_type="int8")
-    return _model
+client = OpenAI()  # API-ключ уже должен быть в окружении: OPENAI_API_KEY
 
 def ogg_to_wav(ogg_path: str) -> str:
     wav_path = tempfile.mktemp(suffix=".wav")
@@ -18,6 +12,13 @@ def ogg_to_wav(ogg_path: str) -> str:
     return wav_path
 
 def transcribe(path: str) -> str:
-    model = _get_model()
-    segments, _ = model.transcribe(path, vad_filter=True, language="ru")
-    return "".join(seg.text for seg in segments).strip()
+    wav_path = ogg_to_wav(path)
+
+    with open(wav_path, "rb") as f:
+        transcript = client.audio.transcriptions.create(
+            model="whisper-1",
+            file=f,
+            language="ru"
+        )
+
+    return transcript.text.strip()
