@@ -5,7 +5,6 @@
 import asyncio
 import os
 import tempfile
-import datetime
 from typing import Dict, Any
 
 from aiogram import Bot, Dispatcher, F
@@ -13,17 +12,11 @@ from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.filters import CommandStart, Command
 from dotenv import load_dotenv
 
-# ВАЖНО: модуль stt должен уметь распознавать голос.
-# Рекомендуемый интерфейс (совместим со старым кодом):
-#   ogg_to_wav(path) -> str
-#   transcribe(wav_path) -> str  # внутри может дергать OpenAI Whisper API
-from stt import ogg_to_wav, transcribe
+# STT: транскрипция через OpenAI Whisper (ogg напрямую)
+from stt import transcribe
 
-# Модуль llm должен иметь:
-#   structure_day(text) -> str   # возвращает ГОТОВЫЙ текст для Notion (с триггером "История:")
-#   understand_task(text) -> str # формирует карточку задачи по твоему промпту
+# LLM: форматирование дневника и разбор задачи
 from llm import structure_day, understand_task
-
 
 # ──────────────────────────────────────────────
 # Init
@@ -39,13 +32,9 @@ dp = Dispatcher()
 # chat_id -> {"mode": "journal"|"task", "last_text": str}
 SESSION: Dict[int, Dict[str, Any]] = {}
 
-
 # ──────────────────────────────────────────────
 # Helpers
 # ──────────────────────────────────────────────
-def today_iso() -> str:
-    return datetime.date.today().isoformat()
-
 def kb_main() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
@@ -58,9 +47,8 @@ def kb_main() -> ReplyKeyboardMarkup:
     )
 
 def render_notion(text: str) -> str:
-    """Возвращаем подготовленный текст как есть (отрезаем Telegram лимит)."""
+    """Возвращаем подготовленный текст как есть (ограничим телеграм-лимит)."""
     return (text or "").strip()[:4000]
-
 
 # ──────────────────────────────────────────────
 # Commands
@@ -96,11 +84,10 @@ async def help_cmd(m: Message):
         "/newday — начать новый день (очистить предыдущую сводку)\n"
         "/summary — показать последнюю сводку\n\n"
         "Режимы:\n"
-        "• Daily Journal — пришли голос или текст. Если в голосе есть эпизод для истории, скажи «История: …» — этот фрагмент попадёт в раздел StoryWorthy & Observations.\n"
+        "• Daily Journal — пришли голос или текст. Если есть эпизод для истории, скажи голосом «История: …» — этот фрагмент попадёт в раздел StoryWorthy & Observations.\n"
         "• Понимание задачи — пришли голос/текст, оформлю по шаблону.\n",
         reply_markup=kb_main()
     )
-
 
 # ──────────────────────────────────────────────
 # Mode switches (buttons)
@@ -124,7 +111,6 @@ async def choose_task(m: Message):
         reply_markup=kb_main()
     )
 
-
 # ──────────────────────────────────────────────
 # Core processors
 # ──────────────────────────────────────────────
@@ -144,12 +130,11 @@ async def process_journal(m: Message, raw_text: str):
 
 async def process_task(m: Message, raw_text: str):
     try:
-        task_text = understand_task(raw_text)  # <- текстовая карточка задачи по твоему промпу
+        task_text = understand_task(raw_text)  # <- текстовая карточка задачи по твоему промпту
     except Exception as e:
         return await m.answer(f"Ошибка при разборе задачи: {e}", reply_markup=kb_main())
 
     await m.answer(task_text[:4000], reply_markup=kb_main())
-
 
 # ──────────────────────────────────────────────
 # Text & Voice handlers
@@ -177,10 +162,9 @@ async def handle_audio(m: Message):
     except Exception as e:
         return await m.answer(f"Не удалось скачать аудио: {e}", reply_markup=kb_main())
 
-    # STT
+    # STT напрямую (ogg -> OpenAI Whisper)
     try:
-        wav_path = ogg_to_wav(ogg_path)      # если в твоём stt это уже не нужно — можешь внутри no-op сделать
-        text = transcribe(wav_path)          # внутри можно дергать OpenAI Whisper API с language='ru'
+        text = transcribe(ogg_path)  # language='ru' по умолчанию
     except Exception as e:
         return await m.answer(f"Не удалось распознать аудио: {e}", reply_markup=kb_main())
 
@@ -193,7 +177,6 @@ async def handle_audio(m: Message):
         await process_journal(m, text)
     else:
         await process_task(m, text)
-
 
 # ──────────────────────────────────────────────
 # Main
